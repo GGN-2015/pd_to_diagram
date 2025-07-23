@@ -423,16 +423,21 @@ public:
     }
 };
 
+// 程序使用方式
+// 1. ./line_checker.out 直接使用：这样的话会启用 stdin 并交互式输入数据
+// 2. ./line_checker.out "文件路径"：从文件路径中读取出数据，不输出交互信息
 int main(int argc, char** argv) {
     FILE* fpin = stdin;
+    bool quiet = false;
     if(argc == 2) {
         fpin = fopen(argv[1], "r"); // 试图打开文件
+        quiet = true;
         if(fpin == nullptr) {       // 打开文件失败
             return 1;
         }
     }
     AlgorithmInput algo_input;
-    algo_input.inputFromFpin(true, fpin);
+    algo_input.inputFromFpin(quiet, fpin);
     algo_input.outputChainMap();
     return 0;
 }
