@@ -424,8 +424,15 @@ public:
 };
 
 int main(int argc, char** argv) {
+    FILE* fpin = stdin;
+    if(argc == 2) {
+        fpin = fopen(argv[1], "r"); // 试图打开文件
+        if(fpin == nullptr) {       // 打开文件失败
+            return 1;
+        }
+    }
     AlgorithmInput algo_input;
-    algo_input.inputFromFpin(true);
+    algo_input.inputFromFpin(true, fpin);
     algo_input.outputChainMap();
     return 0;
 }
