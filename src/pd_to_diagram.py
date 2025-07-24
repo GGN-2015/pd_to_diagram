@@ -3,6 +3,7 @@ import os
 import time
 import numpy as np
 import call_line_checker
+from get_int_list_input_from_dict import get_int_list_input_from_dict
 import math
 import random
 from typing import Dict, List, Any
@@ -53,18 +54,6 @@ def auto_compile(force_compile=False):
         assert os.path.isfile(call_line_checker.LIBPATH)
     # 保证可执行权限
     run_command("chmod +x '%s'" % call_line_checker.LIBPATH)
-
-def get_int_list_input_from_dict(solution: Dict[str,Any]) -> List[int]:
-    arr = []
-
-    arr.append(solution['grid_size'])       # 网格大小
-    arr.append(solution['crossing_number']) # 交叉点数目
-
-    for i in range(solution['crossing_number']):  # 依次输出：位置，朝向，pd_code
-        arr += solution["pos_list"][i]
-        arr.append(solution['direction_list'][i])
-        arr += solution["pd_code"][i]
-    return arr
 
 # solution 结构示例：
 #     {"grid_size":6,"crossing_number":3,"pos_list":[[4,4],[5,2],[2,2]],"direction_list":[2,1,0],"pd_code":[[6,4,1,3],[4,2,5,1],[2,6,3,5]]}
