@@ -3,9 +3,9 @@ import os
 import time
 import tempfile
 import call_line_checker
-import uuid
 import math
 import random
+from typing import Dict
 import json
 from sa import SimulatedAnnealing # 模拟退火程序
 
@@ -54,29 +54,38 @@ def auto_compile(force_compile=False):
     # 保证可执行权限
     run_command("chmod +x '%s'" % call_line_checker.LIBPATH)
 
-# 模拟退火的目标函数
 # solution 结构示例：
 #     {"grid_size":6,"crossing_number":3,"pos_list":[[4,4],[5,2],[2,2]],"direction_list":[2,1,0],"pd_code":[[6,4,1,3],[4,2,5,1],[2,6,3,5]]}
 #     其中 pos_list 和 direction_list 核心参与优化部分
-def objective_function(solution:dict) -> float:
-    temp_dir = tempfile.gettempdir()
-    full_path = os.path.join(temp_dir, f"tmp_{uuid.uuid4().hex}.txt")
+def objective_function(solution: Dict) -> float:
+    answer_now = math.inf  # 默认设为无穷大，处理异常情况
+    
+    # 使用 NamedTemporaryFile 自动管理文件创建和删除
+    with tempfile.NamedTemporaryFile(
+        mode='w', 
+        suffix='.txt', 
+        delete=True,  # 关闭时自动删除文件
+        dir=tempfile.gettempdir()
+    ) as fp:
+        # 写入解决方案数据
+        fp.write(f"{solution['grid_size']}\n")       # 网格大小
+        fp.write(f"{solution['crossing_number']}\n") # 交叉点数目
 
-    # 构建随机输入文件
-    with open(full_path, "w") as fp:
-        fp.write("%d\n" % solution["grid_size"])       # 网格大小
-        fp.write("%d\n" % solution["crossing_number"]) # 交叉点数目
-
-        for i in range(solution["crossing_number"]): # 依次输出：位置，朝向，pd_code
-            fp.write(" ".join(list(map(str, solution["pos_list"][i]))) + "\n")
-            fp.write("%d\n" % solution["direction_list"][i])
-            fp.write(" ".join(list(map(str, solution["pd_code"][i]))) + "\n")
-
-    lc = call_line_checker.LineChecker()
-    answer_now = lc.call(full_path)
-
-    # 删除随机输入文件
-    os.remove(full_path)
+        for i in range(solution['crossing_number']):  # 依次输出：位置，朝向，pd_code
+            fp.write(" ".join(map(str, solution["pos_list"][i])) + "\n")
+            fp.write(f"{solution['direction_list'][i]}\n")
+            fp.write(" ".join(map(str, solution["pd_code"][i])) + "\n")
+        
+        # 确保数据写入磁盘
+        fp.flush()
+        
+        try:
+            lc = call_line_checker.LineChecker()
+            answer_now = lc.call(fp.name)  # 传递临时文件路径
+        except Exception as e:
+            # 记录异常信息以便调试
+            print(f"Error calling LineChecker: {e}")
+    
     return answer_now
 
 def min_manhattan_distance(points: list[list[int | float]]) -> float:
