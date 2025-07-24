@@ -102,7 +102,7 @@ private:
 public:
     double getAnswerLength() const {
         assert(status != "unsolve");
-        return answer_length + bad_pair * sqr(grid_size - 1) * 2.0;
+        return answer_length + bad_pair * sqr(grid_size - 1) * 2.0; // 对 bap pair 引入了很大的惩罚
     }
 
     static double distance_estimate(int dx, int dy) { // 用于实现启发式估价函数
@@ -217,8 +217,24 @@ public:
         return ans + "}";
     }
     void debugShowChessBoard(FILE* fpout=stdout) const { // 展示棋盘上现在的所有信息
+        int xmin, xmax, ymin, ymax; // 框选一个区域显示
+        xmin = grid_size + 1;
+        xmax = 0;
+        ymin = grid_size + 1;
+        ymax = 0;
         for(int j = grid_size; j > 0; j -= 1) {
-            for(int i = 1; i <= grid_size; i += 1) {
+            for(int i = grid_size; i > 0; i -= 1) {
+                if(chess_board.count(std::make_tuple(i, j)) > 0 && chess_board.find(std::make_tuple(i, j))->second > 0) {
+                    xmin = std::min(xmin, i);
+                    xmax = std::max(xmax, i);
+                    ymin = std::min(ymin, j);
+                    ymax = std::max(ymax, j);
+                }
+            }
+        }
+        for(int j = ymax; j >= ymin; j -= 1) {
+            fprintf(fpout, "diag: (y = %4d) ", j); // 输出行号
+            for(int i = xmin; i <= xmax; i += 1) {
                 if(chess_board.count(std::make_tuple(i, j)) <= 0) {
                     fprintf(fpout, "   0");
                 }else {
@@ -492,6 +508,7 @@ int main(int argc, char** argv) {
          AlgorithmInput algo_input; // 从标准输入获取
         algo_input.inputFromFpin(quiet, fpin);
         algo_input.outputChainMap();
+        algo_input.debugShowChessBoard();
     }
     return 0;
 }

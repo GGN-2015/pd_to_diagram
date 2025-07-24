@@ -1,5 +1,6 @@
 import subprocess
 import os
+import time
 import tempfile
 import call_line_checker
 import uuid
@@ -120,13 +121,13 @@ def neighbor_generator(solution_now:dict) -> dict:
     global neighbor_generator_called_time
     assert solution_now is not None
     neighbor_generator_called_time += 1                 # 统计函数被调用了多少次
-    new_solution = json.loads(json.dumps(solution_now)) # 深拷贝一下
-    N = new_solution["grid_size"]
+    N = solution_now["grid_size"]
 
     while True:
 
         # 随机修改一个交叉点的位置，修改他的朝向和位置
-        pos_to_change = neighbor_generator_called_time % new_solution["crossing_number"]
+        new_solution = json.loads(json.dumps(solution_now)) # 深拷贝一下
+        pos_to_change = random.randint(0, new_solution["crossing_number"] - 1)
         new_solution["direction_list"][pos_to_change] = random.randint(0, 3) # 生成一个随机方向
         new_solution["pos_list"][pos_to_change] = [random.randint(2, N-1), random.randint(2, N-1)]
 
@@ -135,9 +136,13 @@ def neighbor_generator(solution_now:dict) -> dict:
             return new_solution
 
 def gen_init(pd_code) -> dict: # 生成初始解
+    cnt = 0
+    begin_time = time.time()
     while True:
+        cnt += 1
+        grid_size = 10 * len(pd_code) + 1
         initial_solution = {
-            "grid_size": 10 * len(pd_code) + 1,
+            "grid_size": grid_size,
             "crossing_number": len(pd_code),
             "pos_list": [],
             "direction_list": [],
@@ -148,9 +153,13 @@ def gen_init(pd_code) -> dict: # 生成初始解
             initial_solution["pos_list"].append([random.randint(2, N-1), random.randint(2, N-1)])
             initial_solution["direction_list"].append(random.randint(0, 3))
         
-        # 遇到可行解的时候就返回
-        if min_manhattan_distance(initial_solution["pos_list"]) >= 3:
+        # 遇到可行解的时候就返回，感觉初始可行解也不太好找
+        if min_manhattan_distance(initial_solution["pos_list"]) >= 3 and objective_function(initial_solution) < 2 * (grid_size - 1) ** 2:
+            print("用时 %13.7f, 已检查 %d 个初始解, 找到了初始可行解" % (time.time() - begin_time, cnt))
             return initial_solution
+        else:
+            if cnt % 100 == 0:
+                print("用时 %13.7f, 已检查 %d 个初始解, 尚未找到初始可行解" % (time.time() - begin_time, cnt))
 
 # 给定一个 pd_code 求一个扭结图出来
 def solve_diagram_for_pd_code(pd_code:list, seed=42):
@@ -162,4 +171,6 @@ def solve_diagram_for_pd_code(pd_code:list, seed=42):
 
 if __name__ == "__main__":    
     auto_compile(True)
-    solve_diagram_for_pd_code([[2, 8, 3, 7], [4, 10, 5, 9], [6, 2, 7, 1], [8, 4, 9, 3], [10, 6, 1, 5]])
+    # solve_diagram_for_pd_code([[2, 8, 3, 7], [4, 10, 5, 9], [6, 2, 7, 1], [8, 4, 9, 3], [10, 6, 1, 5]])
+    # solve_diagram_for_pd_code([[6, 1, 7, 2], [10, 7, 5, 8], [4, 5, 1, 6], [2, 10, 3, 9], [8, 4, 9, 3]])
+    solve_diagram_for_pd_code([[6,1,7,2],[3,13,4,12],[7,21,8,20],[19,5,20,10],[13,19,14,22],[21,11,22,18],[17,15,18,14],[9,17,10,16],[15,9,16,8],[2,5,3,6],[11,1,12,4]])

@@ -12,7 +12,7 @@ class SimulatedAnnealing:
         objective_function: Callable[[Any], float],
         neighbor_function: Callable[[Any], Any],
         initial_temperature: float = 1000.0,
-        final_temperature: float = 0.01,
+        final_temperature: float = 0.001,
         cooling_rate: float = 0.95,
         equilibrium_iterations: int = 200,
         seed: Optional[int] = None,
