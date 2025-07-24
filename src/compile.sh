@@ -8,7 +8,6 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 cd "$SCRIPT_DIR" || exit
 
 # 优化编译
-g++ -O3 -march=native -flto -fno-semantic-interposition \
+g++ -shared -fPIC -O3 -march=native -flto -fno-semantic-interposition \
     -funroll-loops -ftree-vectorize \
-    -fipa-pta \
-    line_checker.cpp -o line_checker.out
+    -fipa-pta -o line_checker.so line_checker.cpp 

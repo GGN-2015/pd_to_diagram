@@ -1,5 +1,6 @@
 import math
 import random
+import time
 from typing import Callable, Any, Tuple, Optional
 
 class SimulatedAnnealing:
@@ -11,10 +12,12 @@ class SimulatedAnnealing:
         objective_function: Callable[[Any], float],
         neighbor_function: Callable[[Any], Any],
         initial_temperature: float = 1000.0,
-        final_temperature: float = 0.001,
+        final_temperature: float = 0.01,
         cooling_rate: float = 0.95,
         equilibrium_iterations: int = 200,
-        seed:Optional[int] = None
+        seed: Optional[int] = None,
+        verbose: bool = True,  # 新增参数：是否输出信息
+        log_interval: int = 1  # 新增参数：输出间隔（温度更新次数）
     ):
         """
         初始化模拟退火优化器
@@ -27,6 +30,8 @@ class SimulatedAnnealing:
             cooling_rate: 降温速率
             equilibrium_iterations: 每个温度下的平衡迭代次数
             seed: 随机数种子，用于结果可复现
+            verbose: 是否输出优化过程信息
+            log_interval: 每隔多少次温度更新输出一次信息
         """
         self.objective_function = objective_function
         self.neighbor_function = neighbor_function
@@ -34,6 +39,8 @@ class SimulatedAnnealing:
         self.final_temperature = final_temperature
         self.cooling_rate = cooling_rate
         self.equilibrium_iterations = equilibrium_iterations
+        self.verbose = verbose  # 新增属性
+        self.log_interval = log_interval  # 新增属性
         
         if seed is not None:
             random.seed(seed)
@@ -66,7 +73,8 @@ class SimulatedAnnealing:
             self.current_solution = self.neighbor_function(None)
         else:
             self.current_solution = initial_solution
-            
+        
+        self.begin_time = time.time()
         self.current_value = self.objective_function(self.current_solution)
         self.best_solution = self.current_solution
         self.best_value = self.current_value
@@ -80,6 +88,10 @@ class SimulatedAnnealing:
             'current_value': [self.current_value],
             'best_value': [self.best_value]
         }
+        
+        # 输出初始状态
+        if self.verbose:
+            print(f"初始温度: {self.temperature:.6f}, 当前解目标值: {self.current_value:.6f}, 最优解目标值: {self.best_value:.6f}")
     
     def accept_criterion(self, delta: float) -> bool:
         """
@@ -117,6 +129,8 @@ class SimulatedAnnealing:
         """
         self.initialize(initial_solution)
         
+        temp_iteration = 0  # 记录温度更新次数
+        
         while self.temperature > self.final_temperature:
             for _ in range(self.equilibrium_iterations):
                 # 生成邻域解
@@ -143,8 +157,21 @@ class SimulatedAnnealing:
             self.history['current_value'].append(self.current_value)
             self.history['best_value'].append(self.best_value)
             
+            # 温度更新计数
+            temp_iteration += 1
+            
+            # 输出当前状态
+            if self.verbose and temp_iteration % self.log_interval == 0:
+                print(f"时刻：{time.time() - self.begin_time:13.6f}, 迭代 {self.iterations}: 温度 = {self.temperature:.6f}, 当前解目标值 = {self.current_value:.6f}, 最优解目标值 = {self.best_value:.6f}")
+                print("当前最优解: ", self.best_solution)
+
             # 降温
             self.update_temperature()
+        
+        # 输出最终结果
+        if self.verbose:
+            print(f"优化完成! 最终温度: {self.temperature:.6f}, 最优解目标值: {self.best_value:.6f}")
+            print("当前最优解: ", self.best_solution)
         
         return self.best_solution, self.best_value
     
@@ -174,15 +201,17 @@ if __name__ == "__main__":
         # 在当前解基础上生成邻域解
         return [xi + random.uniform(-1.0, 1.0) for xi in x]
     
-    # 创建优化器实例
+    # 创建优化器实例（启用详细输出，每5次温度更新输出一次）
     sa = SimulatedAnnealing(
         objective_function=rastrigin_function,
         neighbor_function=neighbor_generator,
+        verbose=True,
+        log_interval=5
     )
     
     # 执行优化
     best_solution, best_value = sa.run()
     
-    print(f"优化结果:")
+    print(f"\n最终优化结果:")
     print(f"最优解: {best_solution}")
     print(f"目标函数值: {best_value:.6f}")

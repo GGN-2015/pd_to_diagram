@@ -1,15 +1,22 @@
 // 给定一个网格图，上面放置了若干个扭结交叉点
 // 我们需要试图使用最短路原则，将这些交叉点连接起来
 #include <algorithm>
-#include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <queue>
 #include <string>
 #include <tuple>
 #include <vector>
 #include <map>
+
+// #include <cassert>
+// 减小错误出现时候的时间开销，后续我们会判断返回值非零
+#define assert(X) if(!(X)) { printf(#X " = %d", (X)); while(1) ; }
+
+// 设置为 0 表示不要输出辅助调试阶段信息，设置为 1 表示需要输出
+#define DEBUG_OUTPUT (0)
 
 // 在初始化阶段，计算一下根号 2 等于多少
 const double SQRT_2 = sqrt(2);
@@ -31,7 +38,7 @@ typedef std::vector<std::tuple<int,int,int,int>> PdCode;
 // 描述算法的输入
 class AlgorithmInput {
 private:
-    int grid_size, crossing_number;
+    int grid_size, crossing_number, bad_pair;
     std::string status = "unsolve"; // 总共有三种状态：unsolve, fail, success
     double answer_length = 0;       // 只有在 sucess 状态下，才有意义，fail 说明结果是 inf
 
@@ -61,7 +68,7 @@ private:
     std::map<std::tuple<int, int>, std::tuple<int, int>> chain_prev;
 
     void clear() {
-        grid_size = crossing_number = 0;
+        grid_size = crossing_number = bad_pair = 0;
         status = "unsolve";
         pos_list.clear();
         direction_list.clear();
@@ -93,6 +100,11 @@ private:
         return x * x;
     }
 public:
+    double getAnswerLength() const {
+        assert(status != "unsolve");
+        return answer_length + bad_pair * sqr(grid_size - 1) * 2.0;
+    }
+
     static double distance_estimate(int dx, int dy) { // 用于实现启发式估价函数
         dx = std::abs(dx);
         dy = std::abs(dy);
@@ -169,7 +181,9 @@ public:
         }
         assert(chess_board.size() == 5 * crossing_number); // 这意味着所有的交叉点之间没有重叠的可能性
         assert(distance_rank.size() == crossing_number * 2);
-        std::sort(distance_rank.begin(), distance_rank.end()); // 按照字典序排序，这样能够优先处理距离近的
+
+        std::sort(distance_rank.begin(), distance_rank.end()); // 按照字典序排序，这样能够优先处理距离远的，我觉得离得近的更不容易被破坏
+        std::reverse(distance_rank.begin(), distance_rank.end());
     }
     std::string serialize() const { // 将自己翻译为一个 json 对象
         std::string ans = "{";
@@ -211,7 +225,7 @@ public:
                     fprintf(fpout, "%4d", chess_board.find(std::make_tuple(i, j)) -> second);
                 }
             }
-            printf("\n");
+            fprintf(fpout, "\n");
         }
     }
 
@@ -271,6 +285,9 @@ public:
         auto real_node = ((*std::get<0>(node_now))[std::get<1>(node_now)]);
         return real_node.pos_now;
     }
+    static AStarNode get_top_node(AStarNodeHandle top_node_handle) {
+        return (*std::get<0>(top_node_handle))[std::get<1>(top_node_handle)];
+    }
 
     // 指定一个 socket 编号
     // 在当前局面下试图将两个编号连起来
@@ -296,32 +313,35 @@ public:
         AStarNodeHandle best_route = nullptr_handle;
         
         // 每次从堆中弹一个元素出来
+        if(DEBUG_OUTPUT) printf(" - begin astar\n"); fflush(stdout);
         while(astar_heap.size() > 0) {
+            if(DEBUG_OUTPUT) printf(" - astar_heap.size() = %d\n", (int)astar_heap.size()); fflush(stdout);
             auto top_node_handle = astar_heap.top(); astar_heap.pop();
-            auto top_node = &((*std::get<0>(top_node_handle))[std::get<1>(top_node_handle)]);
 
-            if(minG.count(top_node->pos_now) <= 0) { // 这说明，我们第一次访问这个节点
-                minG[top_node->pos_now] = std::numeric_limits<double>::infinity();
+            if(minG.count(get_top_node(top_node_handle).pos_now) <= 0) { // 这说明，我们第一次访问这个节点
+                minG[get_top_node(top_node_handle).pos_now] = std::numeric_limits<double>::infinity();
             }
 
             // 如果之前访问时，使用过的距离小于等于这一次访问时已经走的距离，则没有必要对这一节点进行进一步拓展
-            if(minG[top_node->pos_now] <= top_node->g) continue;
+            if(minG[get_top_node(top_node_handle).pos_now] <= get_top_node(top_node_handle).g) continue;
 
             // 更新最优解
-            minG[top_node->pos_now] = top_node->g;
-            if(top_node->pos_now == end_pos) { // 说明找到了最短路
+            minG[get_top_node(top_node_handle).pos_now] = get_top_node(top_node_handle).g;
+            if(get_top_node(top_node_handle).pos_now == end_pos) { // 说明找到了最短路
                 best_route = top_node_handle;
                 break;
             }
 
+            if(DEBUG_OUTPUT) printf(" - considering four sides\n"); fflush(stdout);
+
             // 如果程序成功运行到这里，说明需要对当前节点进行拓展
             // 我们先考虑向水平竖直的四个方向进行拓展，然后再考虑向八个对角进行拓展，一定要注意障碍物相关的问题
-            auto [xnow, ynow] = top_node->pos_now;
+            auto [xnow, ynow] = get_top_node(top_node_handle).pos_now;
             for(int d = 0; d <= 3; d += 1) {
                 int xnxt = xnow + DIR_DX[d];
                 int ynxt = ynow + DIR_DY[d];
                 auto pos_nxt = std::make_tuple(xnxt, ynxt); //这是下一步要走到的位置
-                double gnxt  = top_node->g + 1;             // 因为多走了一步
+                double gnxt  = get_top_node(top_node_handle).g + 1;             // 因为多走了一步
                 if(!(1 <= xnxt && xnxt <= grid_size && 1 <= ynxt && ynxt <= grid_size)) { // 超出地图外了，不可以走
                     continue;
                 }
@@ -335,18 +355,27 @@ public:
                     gnxt, distance_estimate(pos_nxt, end_pos), pos_nxt, top_node_handle));
             }
 
+            if(DEBUG_OUTPUT) printf(" - considering four corners\n"); fflush(stdout);
+
             // 现在再考虑四个角落上的方向
             for(int d = 0; d <= 3; d += 1) {
+                if(DEBUG_OUTPUT) printf(" - corner %d phase 0\n", d); fflush(stdout);
+
                 int xnxt = xnow + CORNER_DX[d];
                 int ynxt = ynow + CORNER_DY[d];
                 auto pos_nxt = std::make_tuple(xnxt, ynxt); //这是下一步要走到的位置
-                double gnxt  = top_node->g + SQRT_2;        // 因为多走了一步
+                double gnxt  = get_top_node(top_node_handle).g + SQRT_2;        // 因为多走了一步
+
+                if(DEBUG_OUTPUT) printf(" - corner %d phase 1\n", d); fflush(stdout);
+
                 if(!(1 <= xnxt && xnxt <= grid_size && 1 <= ynxt && ynxt <= grid_size)) { // 超出地图外了，不可以走
                     continue;
                 }
                 if(chess_board[pos_nxt] != 0 && chess_board[pos_nxt] != socket_index) { // 说明下一个位置有障碍物，不可以走
                     continue;
                 }
+
+                if(DEBUG_OUTPUT) printf(" - corner %d phase 2\n", d); fflush(stdout);
 
                 // 四个角点需要额外考虑对偶对角是否被占据的情况
                 // 如果另外两个对角恰好有边，那么就不能这么斜着走过去
@@ -355,12 +384,19 @@ public:
                     continue;
                 }
 
+                if(DEBUG_OUTPUT) printf(" - corner %d phase 3\n", d); fflush(stdout);
+
                 // 程序执行到这里，说明从起始位置出发，存在一条抵达 pos_nxt 的路径
                 // 送入小根堆
                 astar_heap.push(create_new_node(container,
                     gnxt, distance_estimate(pos_nxt, end_pos), pos_nxt, top_node_handle));
+
+                if(DEBUG_OUTPUT) printf(" - corner %d done\n", d); fflush(stdout);
             }
+
+            if(DEBUG_OUTPUT) printf(" - next pos analized\n"); fflush(stdout);
         }
+        if(DEBUG_OUTPUT) printf(" - end astar\n"); fflush(stdout);
 
         // 执行到这里如果 best_route 仍没有被赋值，这说明目标位置不可达
         if(best_route == nullptr_handle) {
@@ -396,11 +432,19 @@ public:
 
         double total_len = 0;
         for(auto [d, v]: distance_rank) {
-            total_len += create_path_for_socket(v); // 按照从近到远的顺序依次为所有 socket 对构建连线
+            if(DEBUG_OUTPUT) printf("creating path for %d\n", v); fflush(stdout);
+
+            double tmp;
+            tmp = create_path_for_socket(v); // 按照从近到远的顺序依次为所有 socket 对构建连线
+            if(std::isinf(tmp)) {
+                bad_pair += 1;
+            }else {
+                total_len += tmp;
+            }
         }
         answer_length = total_len;
 
-        if(std::isinf(answer_length)) { // 如果结果为无穷大说明计算失败了
+        if(bad_pair != 0) { // 有无法连接的 socket 共计 bad_pair 个
             status = "fail";
         }else {
             status = "success";
@@ -412,32 +456,42 @@ public:
         if(status == "unsolve") { // 调用时自动求解即可
             solveAll();
         }
-        printf("length: %.15f\n", answer_length); // 输出总布线长度，如果方案不合法输出 inf
+        printf("length: %.15f\n", getAnswerLength()); // 输出总布线长度，如果方案不合法输出 inf
         for(auto [pos_now, pos_nxt]: chain_next) {
             auto [x1, y1] = pos_now;
             auto [x2, y2] = pos_nxt;
             if(pos_now != pos_nxt) {
-                printf("%d %d <-> %d %d\n", x1, y1, x2, y2);
+                printf("link: %d %d and %d %d\n", x1, y1, x2, y2);
             }
         }
+        printf("json: %s\n", serialize().c_str()); // 输出一个 json 字符串版本
     }
 };
 
 // 程序使用方式
 // 1. ./line_checker.out 直接使用：这样的话会启用 stdin 并交互式输入数据
 // 2. ./line_checker.out "文件路径"：从文件路径中读取出数据，不输出交互信息
-int main(int argc, char** argv) {
-    FILE* fpin = stdin;
-    bool quiet = false;
-    if(argc == 2) {
-        fpin = fopen(argv[1], "r"); // 试图打开文件
-        quiet = true;
-        if(fpin == nullptr) {       // 打开文件失败
-            return 1;
-        }
+extern "C" double call_main(char* filename) {
+    FILE* fpin = fopen(filename, "r"); // 试图打开文件
+    bool quiet = true;
+    if(fpin == nullptr) { // 打开文件失败
+        exit(1);
     }
     AlgorithmInput algo_input;
     algo_input.inputFromFpin(quiet, fpin);
-    algo_input.outputChainMap();
+    algo_input.solveAll();
+    return algo_input.getAnswerLength();
+}
+
+int main(int argc, char** argv) {
+    FILE* fpin = stdin;
+    bool quiet = false;
+    if(argc == 2) { // 从文件获取
+        return call_main(argv[1]);
+    }else {
+         AlgorithmInput algo_input; // 从标准输入获取
+        algo_input.inputFromFpin(quiet, fpin);
+        algo_input.outputChainMap();
+    }
     return 0;
 }
