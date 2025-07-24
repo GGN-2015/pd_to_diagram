@@ -182,7 +182,7 @@ public:
         assert(chess_board.size() == 5 * crossing_number); // 这意味着所有的交叉点之间没有重叠的可能性
         assert(distance_rank.size() == crossing_number * 2);
 
-        std::sort(distance_rank.begin(), distance_rank.end()); // 按照字典序排序，这样能够优先处理距离远的，我觉得离得近的更不容易被破坏
+        std::sort(distance_rank.begin(), distance_rank.end()); // 按照字典序排序，这样能够优先处理距离近的，我觉得离得近的更不容易被破坏
         std::reverse(distance_rank.begin(), distance_rank.end());
     }
     std::string serialize() const { // 将自己翻译为一个 json 对象
@@ -505,7 +505,7 @@ int main(int argc, char** argv) {
     if(argc == 2) { // 从文件获取
         return call_main(argv[1]);
     }else {
-         AlgorithmInput algo_input; // 从标准输入获取
+        AlgorithmInput algo_input; // 从标准输入获取
         algo_input.inputFromFpin(quiet, fpin);
         algo_input.outputChainMap();
         algo_input.debugShowChessBoard();

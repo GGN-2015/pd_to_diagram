@@ -127,19 +127,29 @@ def neighbor_generator(solution_now:dict) -> dict:
 
         # 随机修改一个交叉点的位置，修改他的朝向和位置
         new_solution = json.loads(json.dumps(solution_now)) # 深拷贝一下
-        pos_to_change = random.randint(0, new_solution["crossing_number"] - 1)
-        new_solution["direction_list"][pos_to_change] = random.randint(0, 3) # 生成一个随机方向
-        new_solution["pos_list"][pos_to_change] = [random.randint(2, N-1), random.randint(2, N-1)]
+        for pos_to_change in [
+            neighbor_generator_called_time % new_solution["crossing_number"], # 先修改一个固定的
+            random.randint(0, new_solution["crossing_number"] - 1),           # 再修改一个随机的
+        ]:
+            new_solution["direction_list"][pos_to_change] = random.randint(0, 3) # 生成一个随机方向
+            new_solution["pos_list"][pos_to_change] = [random.randint(2, N-1), random.randint(2, N-1)]
 
         # 找到了一个合法的解
         if min_manhattan_distance(new_solution["pos_list"]) >= 3:
             return new_solution
 
-def gen_init(pd_code) -> dict: # 生成初始解
+# 生成初始解，跑半个小时才跑出初始可行解都是有可能的
+# 感觉这个地方可能需要想一些好方法生成初始解
+OUTPUT_PERIOD   = 10
+MAX_RANDOM_TIME = 500
+def gen_init(pd_code) -> dict: 
+    print("正在生成初始解 ....")
     cnt = 0
     begin_time = time.time()
+    best_obj_func = math.inf # 记录当前最优初始可行解
+    best_solution_now = {}
+    last_output_time = begin_time - OUTPUT_PERIOD
     while True:
-        cnt += 1
         grid_size = 10 * len(pd_code) + 1
         initial_solution = {
             "grid_size": grid_size,
@@ -153,13 +163,27 @@ def gen_init(pd_code) -> dict: # 生成初始解
             initial_solution["pos_list"].append([random.randint(2, N-1), random.randint(2, N-1)])
             initial_solution["direction_list"].append(random.randint(0, 3))
         
+        if  min_manhattan_distance(initial_solution["pos_list"])  <= 2: # 跳过不可行的解
+            continue
+        cnt += 1
+
         # 遇到可行解的时候就返回，感觉初始可行解也不太好找
-        if min_manhattan_distance(initial_solution["pos_list"]) >= 3 and objective_function(initial_solution) < 2 * (grid_size - 1) ** 2:
-            print("用时 %13.7f, 已检查 %d 个初始解, 找到了初始可行解" % (time.time() - begin_time, cnt))
+        obj_func = objective_function(initial_solution)
+        if obj_func < best_obj_func:
+            best_obj_func     = obj_func
+            best_solution_now = initial_solution # 记录当前找到的最优解
+        
+        if obj_func < 2 * (grid_size - 1) ** 2:
+            print("用时 %13.6f, 已检查 %10d 个初始解, 找到了初始可行解，当前最优解：%13.6f" % (time.time() - begin_time, cnt, best_obj_func))
             return initial_solution
         else:
-            if cnt % 100 == 0:
-                print("用时 %13.7f, 已检查 %d 个初始解, 尚未找到初始可行解" % (time.time() - begin_time, cnt))
+            if cnt % 100 == 0 or time.time() - last_output_time > OUTPUT_PERIOD:
+                print("用时 %13.6f, 已检查 %10d 个初始解, 尚未找到初始可行解，当前最优解：%13.6f" % (time.time() - begin_time, cnt, best_obj_func))
+                last_output_time = time.time()
+
+        if cnt >= MAX_RANDOM_TIME:
+            print("用时 %13.6f, 已检查 %10d 个初始解, 当前最优解：%13.6f，由于没有找到可行解，因而先返回" % (time.time() - begin_time, cnt, best_obj_func))
+            return best_solution_now
 
 # 给定一个 pd_code 求一个扭结图出来
 def solve_diagram_for_pd_code(pd_code:list, seed=42):
