@@ -5,7 +5,7 @@ import numpy as np
 import call_line_checker
 import math
 import random
-from typing import Dict
+from typing import Dict, List, Any
 import json
 from sa import SimulatedAnnealing # 模拟退火程序
 
@@ -54,11 +54,7 @@ def auto_compile(force_compile=False):
     # 保证可执行权限
     run_command("chmod +x '%s'" % call_line_checker.LIBPATH)
 
-# solution 结构示例：
-#     {"grid_size":6,"crossing_number":3,"pos_list":[[4,4],[5,2],[2,2]],"direction_list":[2,1,0],"pd_code":[[6,4,1,3],[4,2,5,1],[2,6,3,5]]}
-#     其中 pos_list 和 direction_list 核心参与优化部分
-def objective_function(solution: Dict) -> float:
-    answer_now = math.inf  # 默认设为无穷大，处理异常情况
+def get_int_list_input_from_dict(solution: Dict[str,Any]) -> List[int]:
     arr = []
 
     arr.append(solution['grid_size'])       # 网格大小
@@ -68,6 +64,14 @@ def objective_function(solution: Dict) -> float:
         arr += solution["pos_list"][i]
         arr.append(solution['direction_list'][i])
         arr += solution["pd_code"][i]
+    return arr
+
+# solution 结构示例：
+#     {"grid_size":6,"crossing_number":3,"pos_list":[[4,4],[5,2],[2,2]],"direction_list":[2,1,0],"pd_code":[[6,4,1,3],[4,2,5,1],[2,6,3,5]]}
+#     其中 pos_list 和 direction_list 核心参与优化部分
+def objective_function(solution: Dict) -> float:
+    answer_now = math.inf  # 默认设为无穷大，处理异常情况
+    arr = get_int_list_input_from_dict(solution)
     
     try:
         lc = call_line_checker.LineChecker()

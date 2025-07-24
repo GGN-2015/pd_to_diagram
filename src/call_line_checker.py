@@ -1,11 +1,32 @@
 import ctypes
 import os
 import numpy as np
-from typing import Tuple
+import functools
+import warnings
 
 # 当前文件所在目录
 DIRNOW = os.path.dirname(os.path.abspath(__file__))
 LIBPATH = os.path.join(DIRNOW, "line_checker.so")
+
+def warn_first_call(message: str):
+    """
+    装饰器：函数第一次被调用时输出警告信息，后续调用不输出。
+    
+    参数:
+        message: 首次调用时要显示的警告信息
+    """
+    def decorator(func):
+        @functools.wraps(func)  # 保留原函数的元信息（如名称、文档字符串）
+        def wrapper(*args, **kwargs):
+            # 检查函数是否被调用过（通过自定义属性 `_has_been_called` 标记）
+            if not hasattr(wrapper, '_has_been_called'):
+                # 首次调用：输出警告
+                warnings.warn(message, UserWarning)
+                wrapper._has_been_called = True  # 标记为已调用
+            # 执行原函数
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 class LineChecker:
     def __init__(self):
@@ -34,6 +55,7 @@ class LineChecker:
         ]
         self.lib.call_main_with_array.restype = ctypes.c_double
 
+    @warn_first_call("LineChecker.call is deprecated since it sometimes trigger OS Error: Open Too Many Files")
     def call(self, file_path: str) -> float:
         """
         调用 C++ 中的 call_main 函数
@@ -44,6 +66,8 @@ class LineChecker:
         返回:
             处理结果的浮点数表示
         """
+        assert os.path.isfile(file_path) # 检查文件是否存在
+
         # 将 Python 字符串转换为 C 字符串（bytes 类型）
         c_file_path = ctypes.c_char_p(file_path.encode('utf-8'))
         
