@@ -1,7 +1,7 @@
 import subprocess
 import os
 import time
-import tempfile
+import numpy as np
 import call_line_checker
 import math
 import random
@@ -59,32 +59,22 @@ def auto_compile(force_compile=False):
 #     其中 pos_list 和 direction_list 核心参与优化部分
 def objective_function(solution: Dict) -> float:
     answer_now = math.inf  # 默认设为无穷大，处理异常情况
-    
-    # 使用 NamedTemporaryFile 自动管理文件创建和删除
-    with tempfile.NamedTemporaryFile(
-        mode='w', 
-        suffix='.txt', 
-        delete=True,  # 关闭时自动删除文件
-        dir=tempfile.gettempdir()
-    ) as fp:
-        # 写入解决方案数据
-        fp.write(f"{solution['grid_size']}\n")       # 网格大小
-        fp.write(f"{solution['crossing_number']}\n") # 交叉点数目
+    arr = []
 
-        for i in range(solution['crossing_number']):  # 依次输出：位置，朝向，pd_code
-            fp.write(" ".join(map(str, solution["pos_list"][i])) + "\n")
-            fp.write(f"{solution['direction_list'][i]}\n")
-            fp.write(" ".join(map(str, solution["pd_code"][i])) + "\n")
-        
-        # 确保数据写入磁盘
-        fp.flush()
-        
-        try:
-            lc = call_line_checker.LineChecker()
-            answer_now = lc.call(fp.name)  # 传递临时文件路径
-        except Exception as e:
-            # 记录异常信息以便调试
-            print(f"Error calling LineChecker: {e}")
+    arr.append(solution['grid_size'])       # 网格大小
+    arr.append(solution['crossing_number']) # 交叉点数目
+
+    for i in range(solution['crossing_number']):  # 依次输出：位置，朝向，pd_code
+        arr += solution["pos_list"][i]
+        arr.append(solution['direction_list'][i])
+        arr += solution["pd_code"][i]
+    
+    try:
+        lc = call_line_checker.LineChecker()
+        answer_now = lc.call_with_array(np.array(arr))  # 使用 numpy 数组向 C 语言代码传递信息
+    except Exception as e:
+        # 记录异常信息以便调试
+        print(f"Error calling LineChecker: {e}")
     
     return answer_now
 
@@ -186,7 +176,7 @@ def gen_init(pd_code) -> dict:
             print("用时 %13.6f, 已检查 %10d 个初始解, 找到了初始可行解，当前最优解：%13.6f" % (time.time() - begin_time, cnt, best_obj_func))
             return initial_solution
         else:
-            if cnt % 100 == 0 or time.time() - last_output_time > OUTPUT_PERIOD:
+            if time.time() - last_output_time > OUTPUT_PERIOD:
                 print("用时 %13.6f, 已检查 %10d 个初始解, 尚未找到初始可行解，当前最优解：%13.6f" % (time.time() - begin_time, cnt, best_obj_func))
                 last_output_time = time.time()
 
@@ -204,6 +194,7 @@ def solve_diagram_for_pd_code(pd_code:list, seed=42):
 
 if __name__ == "__main__":    
     auto_compile(True)
+    # print(objective_function({"grid_size":6,"crossing_number":3,"pos_list":[[4,4],[5,2],[2,2]],"direction_list":[2,1,0],"pd_code":[[6,4,1,3],[4,2,5,1],[2,6,3,5]]}))
     # solve_diagram_for_pd_code([[2, 8, 3, 7], [4, 10, 5, 9], [6, 2, 7, 1], [8, 4, 9, 3], [10, 6, 1, 5]])
     # solve_diagram_for_pd_code([[6, 1, 7, 2], [10, 7, 5, 8], [4, 5, 1, 6], [2, 10, 3, 9], [8, 4, 9, 3]])
     solve_diagram_for_pd_code([[6,1,7,2],[3,13,4,12],[7,21,8,20],[19,5,20,10],[13,19,14,22],[21,11,22,18],[17,15,18,14],[9,17,10,16],[15,9,16,8],[2,5,3,6],[11,1,12,4]])

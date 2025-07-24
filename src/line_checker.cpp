@@ -35,6 +35,12 @@ typedef std::vector<int> IntList;
 typedef std::vector<std::tuple<int,int>> IntPairList;
 typedef std::vector<std::tuple<int,int,int,int>> PdCode;
 
+// 抽象输入接口
+class IntInputInterface {
+public:
+    virtual int getNextInt() = 0; // 用于输入一个整数
+};
+
 // 描述算法的输入
 class AlgorithmInput {
 private:
@@ -123,27 +129,27 @@ public:
         return distance_estimate(pos1, pos2);
     }
     // 从文件或键盘输入一个交叉点布局
-    void inputFromFpin(bool quiet=false, FILE* fpin=stdin) {
+    void inputFromIII(bool quiet, IntInputInterface& iii) {
         status = "unsolve"; // 每次输入新的数据时，需要将所有数据结构清空
         clear();
 
         if(!quiet) printf("grid_size:");
-        fscanf(fpin, "%d", &grid_size); // 输入网格图的大小，网格图的尺寸为 grid_size * grid_size
+        grid_size = iii.getNextInt(); // 输入网格图的大小，网格图的尺寸为 grid_size * grid_size
 
         if(!quiet) printf("crossing_number:");
-        fscanf(fpin, "%d", &crossing_number); // 输入交叉点的数目
+        crossing_number = iii.getNextInt(); // 输入交叉点的数目
 
         // 输入每个交叉点的：位置，朝向，以及 PD_CODE
         for(int i = 1; i <= crossing_number; i += 1) {
 
             if(!quiet) printf("node[%d] posx, posy:", i);
-            int posx, posy; fscanf(fpin, "%d%d", &posx, &posy);
+            int posx = iii.getNextInt(), posy = iii.getNextInt();
             assert(1 <= posx - 1 && posx + 1 <= grid_size); // 地图的坐标为 1 ~ grid_size
             assert(1 <= posy - 1 && posy + 1 <= grid_size);
             pos_list.push_back(std::make_tuple(posx, posy));
 
             if(!quiet) printf("node[%d] direction_delta:", i);
-            int direction_delta; fscanf(fpin, "%d", &direction_delta); // 这个系数表示（下方进入弧，位于哪个方向）
+            int direction_delta = iii.getNextInt(); // 这个系数表示（下方进入弧，位于哪个方向）
             assert(0 <= direction_delta && direction_delta <= 3); // 只有四个方向可以选择
             direction_list.push_back(direction_delta);
            
@@ -154,8 +160,7 @@ public:
             if(!quiet) printf("node[%d] pd_code:", i);
             int pd_code_now[4] = {};
             for(int j = 0; j <= 3; j += 1) { // 输入一个交叉点的 PD_CODE
-                int tmp;
-                fscanf(fpin, "%d", &tmp);
+                int tmp = iii.getNextInt();
                 pd_code_now[j] = tmp;
                 count_number[tmp] += 1; // 统计次数：要求每个弧线恰好出现两次
 
@@ -484,30 +489,89 @@ public:
     }
 };
 
-// 程序使用方式
-// 1. ./line_checker.out 直接使用：这样的话会启用 stdin 并交互式输入数据
-// 2. ./line_checker.out "文件路径"：从文件路径中读取出数据，不输出交互信息
-extern "C" double call_main(char* filename) {
-    FILE* fpin = fopen(filename, "r"); // 试图打开文件
-    bool quiet = true;
-    if(fpin == nullptr) { // 打开文件失败
-        printf("failed to open file ...\n");
-        exit(1);
+class FileIntInputInterface: public IntInputInterface{
+private:
+    FILE* fpin;
+public:
+    FileIntInputInterface(const char* filename) {
+        fpin = fopen(filename, "r");
     }
+    int getNextInt() override {
+        assert(fpin != nullptr);
+        assert(!feof(fpin));
+        int tmp; fscanf(fpin, "%d", &tmp);
+        return tmp;
+    }
+    ~FileIntInputInterface() { // 记得在析构的时候关闭文件 
+        if(fpin != nullptr) {
+            fclose(fpin);
+        }
+    }
+};
+
+class StdinIntInputInterface: public IntInputInterface {
+public:
+    int getNextInt() override {
+        int tmp; fscanf(stdin, "%d", &tmp);
+        return tmp;
+    }
+};
+
+class ArrayIntInputInterface: public IntInputInterface{
+private:
+    std::vector<int> vec;
+    int pos;
+public:
+    ArrayIntInputInterface(int* arr, int cnt) {
+        assert(cnt > 0);
+        pos = 0;
+        vec.resize(cnt);
+        for(int i = 0; i < cnt; i += 1) { // 数组拷贝
+            vec[i] = arr[i];
+        }
+    }
+    int getNextInt() override {
+        int old_pos = pos;
+        pos = (pos + 1) % vec.size(); // 避免读取非法空间
+        return vec[old_pos];
+    }
+};
+
+extern "C" double call_main(char* filename) {
+    auto iii = FileIntInputInterface(filename); // 打开文件
+
     AlgorithmInput algo_input;
-    algo_input.inputFromFpin(quiet, fpin);
+    algo_input.inputFromIII(true, iii);
     algo_input.solveAll();
     return algo_input.getAnswerLength();
 }
 
+// 这个函数会使用 python 调用
+// 其中 arr 和 cnt 来自一个 numpy array
+// python 程序中需要注意数据的类型以及数组内容的连续性
+extern "C" double call_main_with_array(int* arr, int cnt) {
+    auto iii = ArrayIntInputInterface(arr, cnt);
+
+    AlgorithmInput algo_input;
+    algo_input.inputFromIII(true, iii);
+    algo_input.solveAll();
+    return algo_input.getAnswerLength();
+}
+
+// 程序使用方式
+// 1. ./line_checker.out 直接使用：这样的话会启用 stdin 并交互式输入数据
+// 2. ./line_checker.out "文件路径"：从文件路径中读取出数据，不输出交互信息
 int main(int argc, char** argv) {
     FILE* fpin = stdin;
     bool quiet = false;
     if(argc == 2) { // 从文件获取
-        return call_main(argv[1]);
+        double length = call_main(argv[1]);
+        printf("%.16f\n", length);
+        return 0;
     }else {
-        AlgorithmInput algo_input; // 从标准输入获取
-        algo_input.inputFromFpin(quiet, fpin);
+        auto iii = StdinIntInputInterface(); // 从标准输入获取
+        AlgorithmInput algo_input; 
+        algo_input.inputFromIII(quiet, iii);
         algo_input.outputChainMap();
         algo_input.debugShowChessBoard();
     }
