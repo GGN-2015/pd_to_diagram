@@ -11,6 +11,9 @@
 #include <vector>
 #include <map>
 
+// 感觉还是不用这个惩罚比较好
+// #define USE_POS_NEAR_PUNISHMENT
+
 // #include <cassert>
 // 减小错误出现时候的时间开销，后续我们会判断返回值非零
 #define assert(X) if(!(X)) { printf(#X " = %d", (X)); while(1) ; }
@@ -128,6 +131,41 @@ public:
         auto pos2 = socket_position.find(tmp) -> second[1];
         return distance_estimate(pos1, pos2);
     }
+    static double get_manhattan_distance(std::tuple<int, int> pos1, std::tuple<int, int> pos2) { // 计算曼哈顿距离
+        auto [x1, y1] = pos1;
+        auto [x2, y2] = pos2;
+        return std::abs(x1 - x2) + std::abs(y1 - y2);
+    }
+    // 枚举棋盘上的所有正数，如果该点的值不等于 ignore_color，那么就计算到 pos 的曼哈顿距离，最后再取所有距离中的最小值
+    double get_min_manhattan_dis_on_chessboard(std::tuple<int, int> pos, int ignore_color) const {
+        double ans = std::numeric_limits<double>::infinity();
+        for(auto [pos_ch, color_ch]: chess_board) {
+            if(color_ch != ignore_color && color_ch > 0) {
+                ans = std::min(ans, get_manhattan_distance(pos, pos_ch));
+            }
+        }
+        return ans;
+    }
+    double pos_near_punishment(std::tuple<int, int> pos, int ignore_color) const { // 计算走入某个方格的额外惩罚：由于离其他颜色的线比较近
+        #ifdef USE_POS_NEAR_PUNISHMENT
+            if(chess_board.count(pos) > 0) {
+                return 0; // 不要对障碍物本身使用 pos_near 惩罚：否则会干扰自己的起点和终点
+            }
+            const int MIN_POS_NEAR = 5;
+            auto min_dis = get_min_manhattan_dis_on_chessboard(pos, ignore_color);
+            if(std::isinf(min_dis)) {
+                return 0; // 没有惩罚
+            }else {
+                if(min_dis >= MIN_POS_NEAR) {
+                    return 0; // 没有惩罚
+                }else {
+                    return MIN_POS_NEAR - min_dis; // 引入少量惩罚
+                }
+            }
+        #else
+            return 0;
+        #endif
+    }
     // 从文件或键盘输入一个交叉点布局
     void inputFromIII(bool quiet, IntInputInterface& iii) {
         status = "unsolve"; // 每次输入新的数据时，需要将所有数据结构清空
@@ -240,14 +278,15 @@ public:
         for(int j = ymax; j >= ymin; j -= 1) {
             fprintf(fpout, "diag: (y = %4d) ", j); // 输出行号
             for(int i = xmin; i <= xmax; i += 1) {
-                if(chess_board.count(std::make_tuple(i, j)) <= 0) {
-                    fprintf(fpout, "   0");
+                if(chess_board.count(std::make_tuple(i, j)) <= 0 || chess_board.find(std::make_tuple(i, j)) -> second == 0) {
+                    fprintf(fpout, "    ");
                 }else {
                     fprintf(fpout, "%4d", chess_board.find(std::make_tuple(i, j)) -> second);
                 }
             }
             fprintf(fpout, "\n");
         }
+        printf("length: %.15f\n", getAnswerLength()); // 输出总布线长度，如果方案不合法输出 inf
     }
 
     // A* 算法中使用优先队列维护的数据结构
@@ -350,7 +389,7 @@ public:
             minG[get_top_node(top_node_handle).pos_now] = get_top_node(top_node_handle).g;
             if(get_top_node(top_node_handle).pos_now == end_pos) { // 说明找到了最短路
                 best_route = top_node_handle;
-                break;
+                break; // 快速退出
             }
 
             if(DEBUG_OUTPUT) printf(" - considering four sides\n"); fflush(stdout);
@@ -362,8 +401,9 @@ public:
                 int xnxt = xnow + DIR_DX[d];
                 int ynxt = ynow + DIR_DY[d];
                 auto pos_nxt = std::make_tuple(xnxt, ynxt); //这是下一步要走到的位置
-                double gnxt  = get_top_node(top_node_handle).g + 1;             // 因为多走了一步
-                if(!(1 <= xnxt && xnxt <= grid_size && 1 <= ynxt && ynxt <= grid_size)) { // 超出地图外了，不可以走
+                double pos_near_punishment_next = pos_near_punishment(pos_nxt, socket_index);  // 惩罚
+                double gnxt  = get_top_node(top_node_handle).g + 1 + pos_near_punishment_next; // 因为多走了一步
+                if(!(1 <= xnxt && xnxt <= grid_size && 1 <= ynxt && ynxt <= grid_size)) {      // 超出地图外了，不可以走
                     continue;
                 }
                 if(chess_board[pos_nxt] != 0 && chess_board[pos_nxt] != socket_index) { // 说明下一个位置有障碍物，不可以走
@@ -385,7 +425,8 @@ public:
                 int xnxt = xnow + CORNER_DX[d];
                 int ynxt = ynow + CORNER_DY[d];
                 auto pos_nxt = std::make_tuple(xnxt, ynxt); //这是下一步要走到的位置
-                double gnxt  = get_top_node(top_node_handle).g + SQRT_2;        // 因为多走了一步
+                double pos_near_punishment_next = pos_near_punishment(pos_nxt, socket_index);       // 惩罚
+                double gnxt  = get_top_node(top_node_handle).g + SQRT_2 + pos_near_punishment_next; // 因为多走了一步
 
                 if(DEBUG_OUTPUT) printf(" - corner %d phase 1\n", d); fflush(stdout);
 
@@ -477,7 +518,6 @@ public:
         if(status == "unsolve") { // 调用时自动求解即可
             solveAll();
         }
-        printf("length: %.15f\n", getAnswerLength()); // 输出总布线长度，如果方案不合法输出 inf
         for(auto [pos_now, pos_nxt]: chain_next) {
             auto [x1, y1] = pos_now;
             auto [x2, y2] = pos_nxt;

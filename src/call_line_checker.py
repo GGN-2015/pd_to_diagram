@@ -22,7 +22,7 @@ def warn_first_call(message: str):
             if not hasattr(wrapper, '_has_been_called'):
                 # 首次调用：输出警告
                 warnings.warn(message, UserWarning)
-                wrapper._has_been_called = True  # 标记为已调用
+                wrapper._has_been_called = True  # type: ignore # 标记为已调用
             # 执行原函数
             return func(*args, **kwargs)
         return wrapper
