@@ -491,6 +491,7 @@ extern "C" double call_main(char* filename) {
     FILE* fpin = fopen(filename, "r"); // 试图打开文件
     bool quiet = true;
     if(fpin == nullptr) { // 打开文件失败
+        printf("failed to open file ...\n");
         exit(1);
     }
     AlgorithmInput algo_input;
