@@ -7,7 +7,12 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 # 切换到脚本所在目录
 cd "$SCRIPT_DIR" || exit
 
-# 优化编译
+# 优化编译：得到动态链接库
 g++ -shared -fPIC -O3 -march=native -flto -fno-semantic-interposition \
     -funroll-loops -ftree-vectorize \
     -fipa-pta -o line_checker.so line_checker.cpp 
+
+# 优化编译：得到可执行文件
+g++ -O3 -march=native -flto -fno-semantic-interposition \
+    -funroll-loops -ftree-vectorize \
+    -fipa-pta -o line_checker line_checker.cpp 
